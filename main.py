@@ -6,6 +6,7 @@ def import_train_data():
     text_dataset = load_dataset('wikitext', 'wikitext-2-raw-v1', split="train")
     return text_dataset
 
+  
 def temp_function(example):
     print(type(example["text"]))
     example["text"] = nlp(example["text"])
