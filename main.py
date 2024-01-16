@@ -22,7 +22,7 @@ def clean_punctuation_and_nums(txt_to_clean):
     pass
 
 
-def temp:
+def temp():
     pass
 
 
