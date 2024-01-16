@@ -22,6 +22,10 @@ def clean_punctuation_and_nums(txt_to_clean):
     pass
 
 
+def temp:
+    pass
+
+
 def temp_function(example):
     print(type(example["text"]))
     example["text"] = nlp(str(example["text"]))
