@@ -54,20 +54,62 @@ def unigram_word_dict(dataset: dict) -> dict:
     return word_freq_dict
 
 
-def add_start(dataset: dict) -> dict: #TODO: change to bigram dict
+def bigram_clean_and_add_start(dataset: dict) -> dict:
     """
-    this function add a start-of-sentence symbol at the beginning of each doc
-    for the bigram model.
+    this function takes the original dataset, cleans all punctuation and numbers,
+    adds start in the beginning of a new doc (line) and adds the words in their
+    lemma form.
     :param dataset: the tokenized dataset of documents (Spacy doc objects)
-    :return: nothing. changes the existing dataset.
+    :return: a new clean dict of lemmas with a start-of-line marker
     """
-    new_dict = {'text': []}
-    nlp = spacy.load("en_core_web_sm")
-    start_symbol = '<START> '
+    # new dataset
+    clean_dataset = {'text': []}
+    start_symbol = "<START> "
     for doc in dataset['text']:
-        new_doc = start_symbol + str(doc)
-        new_dict['text'].append(nlp(new_doc))
-    return new_dict
+        new_doc = ""
+        for word in doc:
+            # clean punctuation/numbers and add start at the beginning of a new doc
+            if word.is_alpha and len(new_doc) == 0:
+                new_doc += start_symbol + word.lemma_ + " "
+            # clean punctuation/numbers only
+            elif word.is_alpha:
+                new_doc += word.lemma_ + " "
+        # avoid adding empty strings
+        if len(new_doc) > 0:
+            clean_dataset['text'].append(new_doc)
+    return clean_dataset
+
+
+def calculate_bigram_probabilities(dataset: dict) -> dict:
+    """
+    this function calculates the probability for all possible pairs of words within
+    the docs of the given dataset
+    :param dataset: the dataset post cleaning and with added START markers
+    :return: a dictionary in which each key is a possible pair (lemma form) and the
+    value is a list:
+    list[0] = counts number of the pair in the dataset.
+    list[1] = probability of the pair in the dataset (pair counts/all counts)
+    """
+    pair_freq_dict = {}
+    prev_word = ""
+    for doc in dataset['text']:
+        pair = ""
+        for word in doc.split(" "):
+            if len(prev_word) == 0 and len(word):
+                prev_word = word
+                pair = prev_word + " "
+            else:
+                pair += word
+                if pair in pair_freq_dict:
+                    pair_freq_dict[pair] += 1
+                    pair = ""
+                    prev_word = ""
+                else:
+                    pair_freq_dict[pair] = 1
+                    pair = ""
+                    prev_word = ""
+    return pair_freq_dict
+
 
 
 if __name__ == '__main__':
@@ -76,4 +118,8 @@ if __name__ == '__main__':
     temp_dataset = sentences_dataset[:sample_size]  # slicing changes data type to dict
     # key is 'text', value is a list the length of the slicing specified
     tokenize_dataset(temp_dataset)
-    unigram_count_dict = unigram_word_dict(temp_dataset)
+    # unigram_count_dict = unigram_word_dict(temp_dataset)  # DONE FOR NOW
+    bigram_dataset = bigram_clean_and_add_start(temp_dataset)
+    print(bigram_dataset)
+    count_pairs = calculate_bigram_probabilities(bigram_dataset)
+    print(count_pairs)
