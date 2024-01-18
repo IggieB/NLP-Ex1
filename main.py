@@ -1,4 +1,5 @@
 import spacy
+import math
 from datasets import load_dataset
 
 
@@ -23,21 +24,49 @@ def tokenize_dataset(dataset: dict) -> None:
         dataset[key] = list(map(nlp, dataset[key]))
 
 
-def filter_non_alphabetic_characters(dataset: dict) -> dict:
+def unigram_word_dict(dataset: dict) -> dict:
     """
-    filter out all tokens that are recognized as none alphabetic (numbers, punctuation, etc.).
+    this function filters numbers abd punctuation, and creates a word dictionary for the
+    unigram model
     :param dataset:
-    :return: a new filtered dictionary
+    :return: a dictionary in which each key is the lemma form of a word in the dataset,
+    and the value is a list:
+    list[0] = counts number of the word in the dataset.
+    list[1] = probability of the word in the dataset (word counts/all counts)
+    """
+    word_freq_dict = {}  # the new dict
+    for doc in dataset['text']:
+        for word in doc:
+            if word.is_alpha and word.lemma_ in word_freq_dict:
+                #  if the word already exists in the dict
+                word_freq_dict[word.lemma_] += 1
+            elif word.is_alpha:
+                #  if the word is not yet in the dict
+                word_freq_dict[word.lemma_] = 1
+    # a variable of all word counts in the text
+    all_count_sum = sum(word_freq_dict.values())
+    for word, count_list in word_freq_dict.items():
+        # calculating the probability in log space
+        probability = math.log(count_list/all_count_sum)
+        # converting the dict value to a list with 2 elements
+        word_freq_dict[word] = [count_list]
+        word_freq_dict[word].append(probability)
+    return word_freq_dict
+
+
+def add_start(dataset: dict) -> dict: #TODO: change to bigram dict
+    """
+    this function add a start-of-sentence symbol at the beginning of each doc
+    for the bigram model.
+    :param dataset: the tokenized dataset of documents (Spacy doc objects)
+    :return: nothing. changes the existing dataset.
     """
     new_dict = {'text': []}
-    for key in dataset:
-        # TODO: shorten this part
-        for doc in dataset[key]:
-            new_doc = ""
-            for token in doc:
-                if token.is_alpha:
-                    new_doc = new_doc + token.text_with_ws
-            new_dict['text'].append(new_doc)
+    nlp = spacy.load("en_core_web_sm")
+    start_symbol = '<START> '
+    for doc in dataset['text']:
+        new_doc = start_symbol + str(doc)
+        new_dict['text'].append(nlp(new_doc))
     return new_dict
 
 
@@ -47,6 +76,4 @@ if __name__ == '__main__':
     temp_dataset = sentences_dataset[:sample_size]  # slicing changes data type to dict
     # key is 'text', value is a list the length of the slicing specified
     tokenize_dataset(temp_dataset)
-    clean_dict = filter_non_alphabetic_characters(temp_dataset)
-    tokenize_dataset(clean_dict)
-    print(clean_dict)
+    unigram_count_dict = unigram_word_dict(temp_dataset)
