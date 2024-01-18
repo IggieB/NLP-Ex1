@@ -80,7 +80,7 @@ def bigram_clean_and_add_start(dataset: dict) -> dict:
     return clean_dataset
 
 
-def calculate_bigram_probabilities(dataset: dict) -> dict:
+def count_all_bigram(dataset: dict) -> dict:
     """
     this function calculates the probability for all possible pairs of words within
     the docs of the given dataset
@@ -95,20 +95,37 @@ def calculate_bigram_probabilities(dataset: dict) -> dict:
     for doc in dataset['text']:
         pair = ""
         for word in doc.split(" "):
+            # if this is a start ofa new pair and the current word in not white space
             if len(prev_word) == 0 and len(word):
+                # fill markers for previous word and start the pair
                 prev_word = word
                 pair = prev_word + " "
             else:
+                # if there is already a previous word complete the pair
                 pair += word
+                # if the pair is already a key in the dict add to counter
+                # and initialize the markers for the next pair
                 if pair in pair_freq_dict:
                     pair_freq_dict[pair] += 1
-                    pair = ""
-                    prev_word = ""
+                    pair = word + " "
+                    prev_word = word
                 else:
-                    pair_freq_dict[pair] = 1
-                    pair = ""
-                    prev_word = ""
+                    # if the pair is not already in the dict verify and it doesn't
+                    # contain whitespace, add it to the dict and initialize the
+                    # markers for the next pair
+                    if len(pair.split(" ")[0]) > 1 and len(pair.split(" ")[1]) > 1:
+                        pair_freq_dict[pair] = 1
+                    pair = word + " "
+                    prev_word = word
     return pair_freq_dict
+
+
+def calculate_all_bigram_probabilities(dataset: dict) -> dict:
+    """
+    :param dataset:
+    :return:
+    """
+    pass
 
 
 
@@ -120,6 +137,5 @@ if __name__ == '__main__':
     tokenize_dataset(temp_dataset)
     # unigram_count_dict = unigram_word_dict(temp_dataset)  # DONE FOR NOW
     bigram_dataset = bigram_clean_and_add_start(temp_dataset)
-    print(bigram_dataset)
-    count_pairs = calculate_bigram_probabilities(bigram_dataset)
+    count_pairs = count_all_bigram(bigram_dataset)
     print(count_pairs)
