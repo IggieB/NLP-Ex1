@@ -80,7 +80,7 @@ def bigram_clean_and_add_start(dataset: dict) -> dict:
     return clean_dataset
 
 
-def count_all_bigram(dataset: dict) -> dict:
+def count_all_bigrams(dataset: dict) -> dict:
     """
     this function calculates the probability for all possible pairs of words within
     the docs of the given dataset
@@ -95,8 +95,8 @@ def count_all_bigram(dataset: dict) -> dict:
     for doc in dataset['text']:
         pair = ""
         for word in doc.split(" "):
-            # if this is a start ofa new pair and the current word in not white space
-            if len(prev_word) == 0 and len(word):
+            # if this is a start of a new pair and the current word in not white space
+            if len(prev_word) == 0 and len(word) > 0:
                 # fill markers for previous word and start the pair
                 prev_word = word
                 pair = prev_word + " "
@@ -110,32 +110,83 @@ def count_all_bigram(dataset: dict) -> dict:
                     pair = word + " "
                     prev_word = word
                 else:
-                    # if the pair is not already in the dict verify and it doesn't
+                    # if the pair is not already in the dict verify, and it doesn't
                     # contain whitespace, add it to the dict and initialize the
                     # markers for the next pair
-                    if len(pair.split(" ")[0]) > 1 and len(pair.split(" ")[1]) > 1:
+                    if len(pair.split(" ")[0]) >= 1 and len(pair.split(" ")[1]) >= 1:
                         pair_freq_dict[pair] = 1
                     pair = word + " "
                     prev_word = word
     return pair_freq_dict
 
 
-def calculate_all_bigram_probabilities(dataset: dict) -> dict:
+def calculate_all_bigrams_probabilities(dataset: dict) -> tuple[dict, dict]:
     """
-    :param dataset:
-    :return:
+    this function calculates the probability of all bigrams in the dataset and the odds
+    of a word opening a sentence (being a part of a <START> bigram)
+    :param dataset: a dict containing all bigrams found in the dataset and their counts.
+    :return: 2 dicts
+    the first one is regular bigrams, the key will be the pair and the value a list with:
+    list[0] - number of counts, list[1] - probability in log space
+    the second dict has the same structure, but for <START> bigrams (that is, the odds
+    of a word opening a sentence)
     """
-    pass
+    # new dict for regular bigrams and for beginning of sentence
+    bigrams_without_start = {}
+    bigrams_with_start = {}
+    # summing all counts of regular bigrams and beginning of sentence (<START> bigrams)
+    all_pairs_count = sum(count for pair, count in dataset.items() if pair[0] != "<")
+    start_pairs_count = sum(count for pair, count in dataset.items() if pair[0] == "<")
+    # dividing the bigrams to the 2 dicts and calculating their probabilities
+    for pair, count in dataset.items():
+        if pair[0] != "<":
+            bigrams_without_start[pair] = [count, math.log(count/all_pairs_count)]
+        else:
+            bigrams_with_start[pair] = [count, math.log(count/start_pairs_count)]
+    return bigrams_without_start, bigrams_with_start
 
+
+def complete_sentence(sentence: str, dataset: dict) -> str:
+    """
+    using the bigram this function completes the given sentence, adding the most
+    probable next word.
+    :param sentence: a string
+    :param dataset: a dictionary with the probabilities of all bigrams calculated
+    from the training data
+    :return: the completed sentence with the most probable word according to
+    the training dataset
+    """
+    last_word = sentence.split(" ")[-1]
+    sorted_dataset = sorted(dataset.items(), key=lambda x:x[1][0], reverse=True)
+    # returns the dict as a list in which each element is:
+    # ('word1 word2', [counts, probability])
+    for element in sorted_dataset:
+        # The first element to include the relevant word will have the highest
+        # probability after sorting, and therefore will be returned as the next
+        # predicted word
+        if last_word == element[0].split(" ")[0]:
+            next_word = element[0].split(" ")[1]
+            return sentence + " " + next_word
+    # in case the sentence's last word does not exist in the training set and
+    # therefore the next word cannot be predicted
+    return "Cannot predict the next word :("
 
 
 if __name__ == '__main__':
+    # ############ Prep #############
     sample_size = 20  # temp value for time management
     sentences_dataset = import_train_data()  # data type here is "datasets.arrow_dataset.Dataset"
     temp_dataset = sentences_dataset[:sample_size]  # slicing changes data type to dict
     # key is 'text', value is a list the length of the slicing specified
     tokenize_dataset(temp_dataset)
+    # ############ Prep #############
+    # ############ Question 1 #############
     # unigram_count_dict = unigram_word_dict(temp_dataset)  # DONE FOR NOW
     bigram_dataset = bigram_clean_and_add_start(temp_dataset)
-    count_pairs = count_all_bigram(bigram_dataset)
-    print(count_pairs)
+    count_pairs = count_all_bigrams(bigram_dataset)
+    bigrams_probability_dict, start_probability_dict = calculate_all_bigrams_probabilities(count_pairs)
+    # ############ Question 1 #############
+    # ############ Question 2 #############
+    # print(complete_sentence("I have a house in", bigrams_probability_dict)) # DONE FOR NOW
+    # ############ Question 2 #############
+    # ############ Question 3 #############
