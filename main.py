@@ -157,7 +157,7 @@ def complete_sentence(sentence: str, dataset: dict) -> str:
     the training dataset
     """
     last_word = sentence.split(" ")[-1]
-    sorted_dataset = sorted(dataset.items(), key=lambda x:x[1][0], reverse=True)
+    sorted_dataset = sorted(dataset.items(), key=lambda x: x[1][0], reverse=True)
     # returns the dict as a list in which each element is:
     # ('word1 word2', [counts, probability])
     for element in sorted_dataset:
@@ -172,36 +172,54 @@ def complete_sentence(sentence: str, dataset: dict) -> str:
     return "Cannot predict the next word :("
 
 
-def compute_sentence_probability(sentence: str, start_dataset: dict, bigram_dataset: dict) -> float:
+def compute_sentence_probability(sentence: str, start_dataset: dict, bigrams_dataset: dict) -> float:
     """
-
-    :param sentence:
-    :param start_dataset:
-    :param bigram_dataset:
-    :return:
+    this function computes the probability of a given sentence by breaking it into
+    bigrams, checking their probability using the bigram model and returning the
+    overall result
+    :param sentence: the sentence for which the probability will be computed
+    :param start_dataset: a dataset of probabilities of word as sentence openers
+    :param bigrams_dataset: a dataset of all bigrams' probabilities based on the
+    training dataset
+    :return: a value of the probability of the whole sentence
     """
     sentence_w_start = ["<START> " + sentence]
     sentence_probability = 0
+    # create a list of all bigrams in the given sentence
     bigrams_list = [bigram for sentence in sentence_w_start for bigram in
                zip(sentence.split(" ")[:-1], sentence.split(" ")[1:])]
-    # if the the word does not exist as a sentence opener stop and return 0
+    # if the first word does not exist as a sentence opener stop and return 0
     if " ".join(bigrams_list[0]) not in start_dataset.keys():
         return 0
-    # otherwise start running over the remianing bigrams and add their probability
-    # to the total sentence probability
+    # otherwise add its probability as a first word to the overall sentence probability
     sentence_probability += start_dataset[" ".join(bigrams_list[0])][1]
     # go over each bigram, if it exists in the training data, add its probability
     # to the overall sentence probability
     for bigram in bigrams_list[1:]:
-        # if one of the bigrams does not appear in the training dataset stop and
-        # return zero
-        if " ".join(bigram) not in bigram_dataset:
+        # if one of the bigrams is unknown stop and return zero
+        if " ".join(bigram) not in bigrams_dataset:
             sentence_probability = 0
             return sentence_probability
         # otherwise keep summing the sentence's bigrams probabilities to get the
         # probability of the whole sentence
-        sentence_probability += bigram_dataset[" ".join(bigram)][1]
+        sentence_probability += bigrams_dataset[" ".join(bigram)][1]
     return sentence_probability
+
+
+def compute_bigram_perplexity(sentences: list, start_dataset: dict, bigrams_dataset: dict) -> float:
+    """
+
+    :param sentences:
+    :param start_dataset:
+    :param bigrams_dataset:
+    :return:
+    """
+    number_of_bigrams = len(bigrams_dataset)
+    sentences_probabilities = []
+    for sentence in sentences:
+        single_sentence_prob = compute_sentence_probability(sentence, start_dataset, bigrams_dataset)
+        sentences_probabilities.append(single_sentence_prob)
+    print(sentences_probabilities)
 
 
 if __name__ == '__main__':
@@ -211,20 +229,18 @@ if __name__ == '__main__':
     temp_dataset = sentences_dataset[:sample_size]  # slicing changes data type to dict
     # key is 'text', value is a list the length of the slicing specified
     tokenize_dataset(temp_dataset)
-    # ############ Prep #############
     # ############ Question 1 #############
     # unigram_count_dict = unigram_word_dict(temp_dataset)  # DONE FOR NOW
     bigram_dataset = bigram_clean_and_add_start(temp_dataset)
     count_pairs = count_all_bigrams(bigram_dataset)
     bigrams_probability_dict, start_probability_dict = calculate_all_bigrams_probabilities(count_pairs)
-    # ############ Question 1 #############
     # ############ Question 2 #############
     # print(complete_sentence("I have a house in", bigrams_probability_dict)) # DONE FOR NOW
-    # ############ Question 2 #############
     # ############ Question 3 a #############
-    print(compute_sentence_probability("Brad Pitt was born in Oklahoma", start_probability_dict,
-                                       bigrams_probability_dict))
-    print(compute_sentence_probability("The actor was born in USA", start_probability_dict,
-                                       bigrams_probability_dict))
-    # ############ Question 3 a #############
+    # print(compute_sentence_probability("Brad Pitt was born in Oklahoma", start_probability_dict,
+    #                                    bigrams_probability_dict))
+    # print(compute_sentence_probability("The actor was born in USA", start_probability_dict,
+    #                                    bigrams_probability_dict))
     # ############ Question 3 b #############
+    test_set = ["Brad Pitt was born in Oklahoma", "The actor was born in USA"]
+    print(compute_bigram_perplexity(test_set, start_probability_dict, bigrams_probability_dict))
