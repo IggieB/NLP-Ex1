@@ -172,7 +172,7 @@ def complete_sentence(sentence: str, dataset: dict) -> str:
     return "Cannot predict the next word :("
 
 
-def compute_sentence_probability(sentence: str, start_dataset: dict, bigrams_dataset: dict) -> float:
+def compute_sentence_bigram_probability(sentence: str, start_dataset: dict, bigrams_dataset: dict) -> float:
     """
     this function computes the probability of a given sentence by breaking it into
     bigrams, checking their probability using the bigram model and returning the
@@ -190,7 +190,7 @@ def compute_sentence_probability(sentence: str, start_dataset: dict, bigrams_dat
                zip(sentence.split(" ")[:-1], sentence.split(" ")[1:])]
     # if the first word does not exist as a sentence opener stop and return 0
     if " ".join(bigrams_list[0]) not in start_dataset.keys():
-        return 0
+        return float('-inf')
     # otherwise add its probability as a first word to the overall sentence probability
     sentence_probability += start_dataset[" ".join(bigrams_list[0])][1]
     # go over each bigram, if it exists in the training data, add its probability
@@ -198,7 +198,7 @@ def compute_sentence_probability(sentence: str, start_dataset: dict, bigrams_dat
     for bigram in bigrams_list[1:]:
         # if one of the bigrams is unknown stop and return zero
         if " ".join(bigram) not in bigrams_dataset:
-            sentence_probability = 0
+            sentence_probability = float('-inf')
             return sentence_probability
         # otherwise keep summing the sentence's bigrams probabilities to get the
         # probability of the whole sentence
@@ -208,18 +208,62 @@ def compute_sentence_probability(sentence: str, start_dataset: dict, bigrams_dat
 
 def compute_bigram_perplexity(sentences: list, start_dataset: dict, bigrams_dataset: dict) -> float:
     """
+    this function takes a given test set of 1 or more sentences and uses it to
+    calclate the perplexity of the bigram model
+    :param sentences: a test set including 1 or more sentences
+    :param start_dataset: a dataset of probabilities of word as sentence openers
+    :param bigrams_dataset: a dataset of all bigrams' probabilities based on the
+    training dataset
+    :return: a value of the model's perplexity using the test set
+    """
+    overall_sentences_probability = 0
+    bigrams_number = 0
+    for sentence in sentences:
+        # calculate all bigrams in the sentences of the test set
+        bigrams_number += len(sentence.split(" ")) - 1
+        # handle cases of probability = 0
+        if compute_sentence_bigram_probability(sentence, start_dataset, bigrams_dataset) == 0:
+            overall_sentences_probability -= float('-inf')
+        else:
+            overall_sentences_probability -= compute_sentence_bigram_probability(
+                sentence, start_dataset, bigrams_dataset)
+    return math.pow(2, overall_sentences_probability / bigrams_number)
 
-    :param sentences:
+
+def compute_sentence_unigram_probability(sentence: str, unigram_dataset: dict) -> float:
+    """
+    this function computes the probability of a given sentence using the unigram model
+    :param sentence: the sentence for which the probability will be computed
+    :param unigram_dataset: a dataset of all unigrams' probabilities based on the
+    training dataset
+    :return: a value of the sentence's probability
+    """
+    sentence_probability = 0
+    for word in sentence.split(" "):
+        try:
+            sentence_probability += unigram_dataset[word][1]
+        except:
+            sentence_probability += float('-inf')
+    return sentence_probability
+
+
+def compute_sentence_interpolation_probability(sentence: str, unigram_dataset: dict,
+                                               start_dataset: dict, bigrams_dataset: dict) -> float:
+    """
+
+    :param sentence:
+    :param unigram_dataset:
     :param start_dataset:
     :param bigrams_dataset:
     :return:
     """
-    number_of_bigrams = len(bigrams_dataset)
-    sentences_probabilities = []
-    for sentence in sentences:
-        single_sentence_prob = compute_sentence_probability(sentence, start_dataset, bigrams_dataset)
-        sentences_probabilities.append(single_sentence_prob)
-    print(sentences_probabilities)
+    sentence_interpolation_probability = 0
+    weights = [1/3, 2/3]
+    unigram_probability = weights[0] * compute_sentence_unigram_probability(sentence, unigram_dataset)
+    bigram_probability = weights[1] * compute_sentence_bigram_probability(sentence, start_dataset, bigrams_dataset)
+    sentence_interpolation_probability = unigram_probability + bigram_probability
+    return sentence_interpolation_probability
+
 
 
 if __name__ == '__main__':
@@ -230,17 +274,29 @@ if __name__ == '__main__':
     # key is 'text', value is a list the length of the slicing specified
     tokenize_dataset(temp_dataset)
     # ############ Question 1 #############
-    # unigram_count_dict = unigram_word_dict(temp_dataset)  # DONE FOR NOW
+    unigrams_dataset = unigram_word_dict(temp_dataset)
     bigram_dataset = bigram_clean_and_add_start(temp_dataset)
     count_pairs = count_all_bigrams(bigram_dataset)
     bigrams_probability_dict, start_probability_dict = calculate_all_bigrams_probabilities(count_pairs)
     # ############ Question 2 #############
-    # print(complete_sentence("I have a house in", bigrams_probability_dict)) # DONE FOR NOW
+    # print(complete_sentence("I have a house in", bigrams_probability_dict))
     # ############ Question 3 a #############
-    # print(compute_sentence_probability("Brad Pitt was born in Oklahoma", start_probability_dict,
+    # print(compute_sentence_bigram_probability("Brad Pitt was born in Oklahoma", start_probability_dict,
     #                                    bigrams_probability_dict))
-    # print(compute_sentence_probability("The actor was born in USA", start_probability_dict,
+    # print(compute_sentence_bigram_probability("The actor was born in USA", start_probability_dict,
     #                                    bigrams_probability_dict))
     # ############ Question 3 b #############
-    test_set = ["Brad Pitt was born in Oklahoma", "The actor was born in USA"]
-    print(compute_bigram_perplexity(test_set, start_probability_dict, bigrams_probability_dict))
+    # test_set = ["Brad Pitt was born in Oklahoma", "The actor was born in USA"]
+    # bigram_perplexity = compute_bigram_perplexity(test_set, start_probability_dict, bigrams_probability_dict)
+    # print(bigram_perplexity)
+    # ############ Question 4 #############
+    # ############ linear interpolation smoothing probability
+    test_sentence1 = "Brad Pitt was born in Oklahoma"
+    print(compute_sentence_interpolation_probability(test_sentence1, unigrams_dataset, start_probability_dict,
+                                               bigrams_probability_dict))
+    test_sentence2 = "The actor was born in USA"
+    print(compute_sentence_interpolation_probability(test_sentence2, unigrams_dataset, start_probability_dict,
+                                                     bigrams_probability_dict))
+    # ############ linear interpolation smoothing perplexity
+
+
