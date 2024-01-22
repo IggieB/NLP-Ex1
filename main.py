@@ -1,6 +1,9 @@
 import spacy
 import math
 from datasets import load_dataset
+from collections import Counter
+from operator import itemgetter
+from typing import Optional
 
 
 def import_train_data():
@@ -12,164 +15,77 @@ def import_train_data():
     return text_dataset
 
 
-def tokenize_dataset(dataset: dict) -> None:
+def tokenize_dataset(dataset: list[str]) -> list:
     """
-    # within the dataset (dict -> key = 'text', value = list with all lines)
-    go over every line (every element in the list) and tokenize it using Spacy's nlp
-    :param dataset:
-    :return: nothing. Changes the existing dataset.
+    tokenize every string element in a list using Spacy's nlp
+    :param dataset: A list of strings
+    :return: A list of documents (each containing tokens)
     """
+    string_tokens = []
     nlp = spacy.load("en_core_web_sm")
-    for key in dataset:
-        dataset[key] = list(map(nlp, dataset[key]))
+    for string in dataset:
+        string = nlp(string)
+        string_tokens.append(string)
+    return string_tokens
 
 
-def unigram_word_dict(dataset: dict) -> dict:
-    """
-    this function filters numbers abd punctuation, and creates a word dictionary for the
-    unigram model
-    :param dataset:
-    :return: a dictionary in which each key is the lemma form of a word in the dataset,
-    and the value is a list:
-    list[0] = counts number of the word in the dataset.
-    list[1] = probability of the word in the dataset (word counts/all counts)
-    """
-    word_freq_dict = {}  # the new dict
-    for doc in dataset['text']:
-        for word in doc:
-            if word.is_alpha and word.lemma_ in word_freq_dict:
-                #  if the word already exists in the dict
-                word_freq_dict[word.lemma_] += 1
-            elif word.is_alpha:
-                #  if the word is not yet in the dict
-                word_freq_dict[word.lemma_] = 1
+def filter_punctuation_numbers_add_start(list_of_tokens: list) -> list:
+    filtered_documents = []
+    for doc in list_of_tokens:
+        doc_list = [word.lemma_ for word in doc if word.is_alpha]
+        doc_string = " ".join(doc_list)
+        if doc_string:
+            filtered_documents.append("<START> " + doc_string)
+    return filtered_documents
+# TODO: add comments
+
+
+def unigram_probability_dict(dataset: list) -> dict:
+    all_words_list = [word for doc in dataset for word in doc.split()]
+    word_freq_dict = dict(Counter(all_words_list))  # the new dict
+    del word_freq_dict['<START>']
     # a variable of all word counts in the text
     all_count_sum = sum(word_freq_dict.values())
-    for word, count_list in word_freq_dict.items():
-        # calculating the probability in log space
-        probability = math.log(count_list/all_count_sum)
-        # converting the dict value to a list with 2 elements
-        word_freq_dict[word] = [count_list]
-        word_freq_dict[word].append(probability)
-    return word_freq_dict
+    for word, count in word_freq_dict.items():
+        # calculating the probability
+        probability = count/all_count_sum
+        word_freq_dict[word] = probability
+    sorted_unigrams = {k: v for k, v in sorted(word_freq_dict.items(), key=itemgetter(1), reverse=True)}
+    return sorted_unigrams
+# TODO: add comments
 
 
-def bigram_clean_and_add_start(dataset: dict) -> dict:
-    """
-    this function takes the original dataset, cleans all punctuation and numbers,
-    adds start in the beginning of a new doc (line) and adds the words in their
-    lemma form.
-    :param dataset: the tokenized dataset of documents (Spacy doc objects)
-    :return: a new clean dict of lemmas with a start-of-line marker
-    """
-    # new dataset
-    clean_dataset = {'text': []}
-    start_symbol = "<START> "
-    for doc in dataset['text']:
-        new_doc = ""
-        for word in doc:
-            # clean punctuation/numbers and add start at the beginning of a new doc
-            if word.is_alpha and len(new_doc) == 0:
-                new_doc += start_symbol + word.lemma_ + " "
-            # clean punctuation/numbers only
-            elif word.is_alpha:
-                new_doc += word.lemma_ + " "
-        # avoid adding empty strings
-        if len(new_doc) > 0:
-            clean_dataset['text'].append(new_doc)
-    return clean_dataset
+def bigram_probability_dict(dataset: list) -> dict:
+    all_bigrams_list = [b for l in dataset for b in zip(l.split(" ")[:-1], l.split(" ")[1:])]
+    bigram_freq_dict = dict(Counter(all_bigrams_list))
+    # start_bigrams = {k: v for k, v in bigram_freq_dict.items() if k[0] == '<START>'}
+    all_count_sum = sum(bigram_freq_dict.values())
+    for pair, count in bigram_freq_dict.items():
+        # calculating the probability
+        probability = count / all_count_sum
+        bigram_freq_dict[pair] = probability
+    sorted_bigrams = {k: v for k, v in sorted(bigram_freq_dict.items(), key=itemgetter(1), reverse=True)}
+    return sorted_bigrams
+# TODO: add comments
 
 
-def count_all_bigrams(dataset: dict) -> dict:
-    """
-    this function calculates the probability for all possible pairs of words within
-    the docs of the given dataset
-    :param dataset: the dataset post cleaning and with added START markers
-    :return: a dictionary in which each key is a possible pair (lemma form) and the
-    value is a list:
-    list[0] = counts number of the pair in the dataset.
-    list[1] = probability of the pair in the dataset (pair counts/all counts)
-    """
-    pair_freq_dict = {}
-    prev_word = ""
-    for doc in dataset['text']:
-        pair = ""
-        for word in doc.split(" "):
-            # if this is a start of a new pair and the current word in not white space
-            if len(prev_word) == 0 and len(word) > 0:
-                # fill markers for previous word and start the pair
-                prev_word = word
-                pair = prev_word + " "
-            else:
-                # if there is already a previous word complete the pair
-                pair += word
-                # if the pair is already a key in the dict add to counter
-                # and initialize the markers for the next pair
-                if pair in pair_freq_dict:
-                    pair_freq_dict[pair] += 1
-                    pair = word + " "
-                    prev_word = word
-                else:
-                    # if the pair is not already in the dict verify, and it doesn't
-                    # contain whitespace, add it to the dict and initialize the
-                    # markers for the next pair
-                    if len(pair.split(" ")[0]) >= 1 and len(pair.split(" ")[1]) >= 1:
-                        pair_freq_dict[pair] = 1
-                    pair = word + " "
-                    prev_word = word
-    return pair_freq_dict
+def calc_bigram_transition(bigrams_dict: dict, last_word: str) -> Optional[str]:
+    potential_bigrams = {k: v for k, v in bigrams_dict.items() if k[0] == last_word}
+    if not len(potential_bigrams):
+        return None
+    sorted_potential_bigrams = {k: v for k, v in sorted(potential_bigrams.items(), key=itemgetter(1), reverse=True)}
+    next_word = list(sorted_potential_bigrams.keys())[0][1]
+    return next_word
+# TODO: add comments
 
 
-def calculate_all_bigrams_probabilities(dataset: dict) -> tuple[dict, dict]:
-    """
-    this function calculates the probability of all bigrams in the dataset and the odds
-    of a word opening a sentence (being a part of a <START> bigram)
-    :param dataset: a dict containing all bigrams found in the dataset and their counts.
-    :return: 2 dicts
-    the first one is regular bigrams, the key will be the pair and the value a list with:
-    list[0] - number of counts, list[1] - probability in log space
-    the second dict has the same structure, but for <START> bigrams (that is, the odds
-    of a word opening a sentence)
-    """
-    # new dict for regular bigrams and for beginning of sentence
-    bigrams_without_start = {}
-    bigrams_with_start = {}
-    # summing all counts of regular bigrams and beginning of sentence (<START> bigrams)
-    all_pairs_count = sum(count for pair, count in dataset.items() if pair[0] != "<")
-    start_pairs_count = sum(count for pair, count in dataset.items() if pair[0] == "<")
-    # dividing the bigrams to the 2 dicts and calculating their probabilities
-    for pair, count in dataset.items():
-        if pair[0] != "<":
-            bigrams_without_start[pair] = [count, math.log(count/all_pairs_count)]
-        else:
-            bigrams_with_start[pair] = [count, math.log(count/start_pairs_count)]
-    return bigrams_without_start, bigrams_with_start
-
-
-def complete_sentence(sentence: str, dataset: dict) -> str:
-    """
-    using the bigram this function completes the given sentence, adding the most
-    probable next word.
-    :param sentence: a string
-    :param dataset: a dictionary with the probabilities of all bigrams calculated
-    from the training data
-    :return: the completed sentence with the most probable word according to
-    the training dataset
-    """
+def complete_sentence(sentence: str, bigrams_dict: dict) -> str:
     last_word = sentence.split(" ")[-1]
-    sorted_dataset = sorted(dataset.items(), key=lambda x: x[1][0], reverse=True)
-    # returns the dict as a list in which each element is:
-    # ('word1 word2', [counts, probability])
-    for element in sorted_dataset:
-        # The first element to include the relevant word will have the highest
-        # probability after sorting, and therefore will be returned as the next
-        # predicted word
-        if last_word == element[0].split(" ")[0]:
-            next_word = element[0].split(" ")[1]
-            return sentence + " " + next_word
-    # in case the sentence's last word does not exist in the training set and
-    # therefore the next word cannot be predicted
-    return "Cannot predict the next word :("
+    next_word = calc_bigram_transition(bigrams_dict, last_word)
+    if not next_word:
+        return "Cannot predict the next word :("
+    return sentence + " " + next_word
+# TODO: add comments
 
 
 def compute_sentence_bigram_probability(sentence: str, start_dataset: dict, bigrams_dataset: dict) -> float:
@@ -183,19 +99,13 @@ def compute_sentence_bigram_probability(sentence: str, start_dataset: dict, bigr
     training dataset
     :return: a value of the probability of the whole sentence
     """
-    sentence_w_start = ["<START> " + sentence]
     sentence_probability = 0
+    sentence_list = [sentence]
     # create a list of all bigrams in the given sentence
-    bigrams_list = [bigram for sentence in sentence_w_start for bigram in
-               zip(sentence.split(" ")[:-1], sentence.split(" ")[1:])]
-    # if the first word does not exist as a sentence opener stop and return 0
-    if " ".join(bigrams_list[0]) not in start_dataset.keys():
-        return float('-inf')
-    # otherwise add its probability as a first word to the overall sentence probability
-    sentence_probability += start_dataset[" ".join(bigrams_list[0])][1]
+    bigrams_list = [b for l in sentence_list for b in zip(l.split(" ")[:-1], l.split(" ")[1:])]
     # go over each bigram, if it exists in the training data, add its probability
     # to the overall sentence probability
-    for bigram in bigrams_list[1:]:
+    for bigram in bigrams_list[:-1]:
         # if one of the bigrams is unknown stop and return zero
         if " ".join(bigram) not in bigrams_dataset:
             sentence_probability = float('-inf')
@@ -209,7 +119,7 @@ def compute_sentence_bigram_probability(sentence: str, start_dataset: dict, bigr
 def compute_bigram_perplexity(sentences: list, start_dataset: dict, bigrams_dataset: dict) -> float:
     """
     this function takes a given test set of 1 or more sentences and uses it to
-    calclate the perplexity of the bigram model
+    calculate the perplexity of the bigram model
     :param sentences: a test set including 1 or more sentences
     :param start_dataset: a dataset of probabilities of word as sentence openers
     :param bigrams_dataset: a dataset of all bigrams' probabilities based on the
@@ -230,73 +140,85 @@ def compute_bigram_perplexity(sentences: list, start_dataset: dict, bigrams_data
     return math.pow(2, overall_sentences_probability / bigrams_number)
 
 
-def compute_sentence_unigram_probability(sentence: str, unigram_dataset: dict) -> float:
+def convert_test_set(sentences: list) -> list:
     """
-    this function computes the probability of a given sentence using the unigram model
-    :param sentence: the sentence for which the probability will be computed
-    :param unigram_dataset: a dataset of all unigrams' probabilities based on the
-    training dataset
-    :return: a value of the sentence's probability
+    this function cleans the test set's sentences from punctuation, numbers and converts all
+    words to their lemma form
+    :param sentences: the sentences included in the test set
+    :return: a list with the converted test set
     """
-    sentence_probability = 0
-    for word in sentence.split(" "):
-        try:
-            sentence_probability += unigram_dataset[word][1]
-        except:
-            sentence_probability += float('-inf')
-    return sentence_probability
+    sentences_dict = {'text': sentences}
+    tokenize_dataset(sentences_dict)
+    clean_dataset = {'text': []}
+    for doc in sentences_dict['text']:
+        new_doc = ""
+        for word in doc:
+            # clean punctuation/numbers and add start at the beginning of a new doc
+            if word.is_alpha and len(new_doc) == 0:
+                new_doc += word.lemma_ + " "
+            # clean punctuation/numbers only
+            elif word.is_alpha:
+                new_doc += word.lemma_ + " "
+        # avoid adding empty strings
+        if len(new_doc) > 0:
+            clean_dataset['text'].append(new_doc)
+    return clean_dataset['text']
 
 
-def compute_sentence_interpolation_probability(sentence: str, unigram_dataset: dict,
+def compute_interpolation_transition_probability(sentence: str, unigram_dataset: dict,
                                                start_dataset: dict, bigrams_dataset: dict) -> float:
-    """
-
-    :param sentence:
-    :param unigram_dataset:
-    :param start_dataset:
-    :param bigrams_dataset:
-    :return:
-    """
-    sentence_interpolation_probability = 0
-    weights = [1/3, 2/3]
-    unigram_probability = weights[0] * compute_sentence_unigram_probability(sentence, unigram_dataset)
-    bigram_probability = weights[1] * compute_sentence_bigram_probability(sentence, start_dataset, bigrams_dataset)
-    sentence_interpolation_probability = unigram_probability + bigram_probability
-    return sentence_interpolation_probability
-
+    sentence_probability = 0
+    sentence_unigrams = sentence.split(" ")
+    sentence_list = ["<START> " + sentence]
+    sentence_bigrams = [b for l in sentence_list for b in zip(l.split(" ")[:-1], l.split(" ")[1:])]
+    # check if first word is a doc opener:
+    try:
+        transition_probability = 0
+        transition_probability += (1 / 3) * math.exp(unigram_dataset[sentence_unigrams[0]][1])
+        transition_probability += (2 / 3) * math.exp(start_dataset[sentence_bigrams[0]][1])
+        sentence_probability += math.log(transition_probability)
+    except:
+        pass
+    for i in range(len(sentence_unigrams)-1):
+        try:
+            transition_probability += (1/3) * math.exp(unigram_dataset[sentence_unigrams[i]][1])
+            transition_probability += (2/3) * math.exp()
+        except:
+            pass
+        print(sentence_unigrams[i], sentence_bigrams[i])
+    # TODO: exp the probabilities to add them and then re-log!
 
 
 if __name__ == '__main__':
     # ############ Prep #############
-    sample_size = 20  # temp value for time management
     sentences_dataset = import_train_data()  # data type here is "datasets.arrow_dataset.Dataset"
-    temp_dataset = sentences_dataset[:sample_size]  # slicing changes data type to dict
-    # key is 'text', value is a list the length of the slicing specified
-    tokenize_dataset(temp_dataset)
+    dict_dataset = sentences_dataset[0:20]  # change to dict key is 'text', value is a strings list
+    tokens_list = tokenize_dataset(dict_dataset['text'])
+    filtered_tokens = filter_punctuation_numbers_add_start(tokens_list)
     # ############ Question 1 #############
-    unigrams_dataset = unigram_word_dict(temp_dataset)
-    bigram_dataset = bigram_clean_and_add_start(temp_dataset)
-    count_pairs = count_all_bigrams(bigram_dataset)
-    bigrams_probability_dict, start_probability_dict = calculate_all_bigrams_probabilities(count_pairs)
+    unigrams_probability_dict = unigram_probability_dict(filtered_tokens)
+    bigrams_probability_dict = bigram_probability_dict(filtered_tokens)
     # ############ Question 2 #############
-    # print(complete_sentence("I have a house in", bigrams_probability_dict))
+    # sentence = "I have a house in"
+    # tokenized_sentence = tokenize_dataset([sentence])
+    # filtered_sentence = filter_punctuation_numbers_add_start(tokenized_sentence)[0]
+    # print(complete_sentence(filtered_sentence, bigrams_probability_dict))
     # ############ Question 3 a #############
-    # print(compute_sentence_bigram_probability("Brad Pitt was born in Oklahoma", start_probability_dict,
+    # TODO: start here
+    test_set = ["Brad Pitt was born in Oklahoma", "The actor was born in USA"]
+    tokenized_test_set = tokenize_dataset(test_set)
+    filtered_test_set = filter_punctuation_numbers_add_start(tokenized_test_set)
+    print(filtered_test_set)
+    # print(compute_sentence_bigram_probability(lemma_test_set[0], start_probability_dict,
     #                                    bigrams_probability_dict))
-    # print(compute_sentence_bigram_probability("The actor was born in USA", start_probability_dict,
+    # print(compute_sentence_bigram_probability(lemma_test_set[1], start_probability_dict,
     #                                    bigrams_probability_dict))
     # ############ Question 3 b #############
-    # test_set = ["Brad Pitt was born in Oklahoma", "The actor was born in USA"]
-    # bigram_perplexity = compute_bigram_perplexity(test_set, start_probability_dict, bigrams_probability_dict)
+    # bigram_perplexity = compute_bigram_perplexity(lemma_test_set, start_probability_dict, bigrams_probability_dict)
     # print(bigram_perplexity)
     # ############ Question 4 #############
     # ############ linear interpolation smoothing probability
-    test_sentence1 = "Brad Pitt was born in Oklahoma"
-    print(compute_sentence_interpolation_probability(test_sentence1, unigrams_dataset, start_probability_dict,
-                                               bigrams_probability_dict))
-    test_sentence2 = "The actor was born in USA"
-    print(compute_sentence_interpolation_probability(test_sentence2, unigrams_dataset, start_probability_dict,
-                                                     bigrams_probability_dict))
-    # ############ linear interpolation smoothing perplexity
-
-
+    # test_sentence = ["Valkyria Chronicles III"]
+    # test_sentence_lemma = convert_test_set(test_sentence)
+    # compute_interpolation_transition_probability(test_sentence_lemma[0], unigrams_dataset,
+    #                                              start_probability_dict, bigrams_probability_dict)
