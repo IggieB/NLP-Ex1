@@ -57,3 +57,31 @@ def compute_unigram_perplexity(sentences: list, unigram_dataset: dict) -> float:
         overall_sentences_probability -= sentence_probability
     # calculate the perplexity
     return math.pow(2, overall_sentences_probability / unigrams_number)
+
+
+def compute_sentence_bigram_probability(sentence: str, start_dataset: dict, bigrams_dataset: dict) -> float:
+    """
+    this function computes the probability of a given sentence by breaking it into
+    bigrams, checking their probability using the bigram model and returning the
+    overall result
+    :param sentence: the sentence for which the probability will be computed
+    :param start_dataset: a dataset of probabilities of word as sentence openers
+    :param bigrams_dataset: a dataset of all bigrams' probabilities based on the
+    training dataset
+    :return: a value of the probability of the whole sentence
+    """
+    sentence_probability = 0
+    sentence_list = [sentence]
+    # create a list of all bigrams in the given sentence
+    bigrams_list = [b for l in sentence_list for b in zip(l.split(" ")[:-1], l.split(" ")[1:])]
+    # go over each bigram, if it exists in the training data, add its probability
+    # to the overall sentence probability
+    for bigram in bigrams_list[:-1]:
+        # if one of the bigrams is unknown stop and return zero
+        if " ".join(bigram) not in bigrams_dataset:
+            sentence_probability = float('-inf')
+            return sentence_probability
+        # otherwise keep summing the sentence's bigrams probabilities to get the
+        # probability of the whole sentence
+        sentence_probability += bigrams_dataset[" ".join(bigram)][1]
+    return sentence_probability
