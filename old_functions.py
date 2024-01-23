@@ -85,3 +85,17 @@ def compute_sentence_bigram_probability(sentence: str, start_dataset: dict, bigr
         # probability of the whole sentence
         sentence_probability += bigrams_dataset[" ".join(bigram)][1]
     return sentence_probability
+
+
+def compute_bigram_perplexity(sentences: list, bigrams_dataset: dict) -> float:
+    overall_sentences_probability = 0
+    bigrams_number = 0
+    for sentence in sentences:
+        # calculate all bigrams in the sentences of the test set
+        bigrams_number += len(sentence.split(" ")) - 1
+        # handle cases of probability = 0
+        if compute_sentence_bigram_probability(sentence, bigrams_dataset) == 0:
+            overall_sentences_probability -= float('-inf')
+        else:
+            overall_sentences_probability -= compute_sentence_bigram_probability(sentence, bigrams_dataset)
+    return math.pow(2, overall_sentences_probability / bigrams_number)
