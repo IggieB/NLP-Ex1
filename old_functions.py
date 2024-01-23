@@ -99,3 +99,27 @@ def compute_bigram_perplexity(sentences: list, bigrams_dataset: dict) -> float:
         else:
             overall_sentences_probability -= compute_sentence_bigram_probability(sentence, bigrams_dataset)
     return math.pow(2, overall_sentences_probability / bigrams_number)
+
+
+def compute_interpolation_transition_probability(sentence: str, unigram_dataset: dict,
+                                               start_dataset: dict, bigrams_dataset: dict) -> float:
+    sentence_probability = 0
+    sentence_unigrams = sentence.split(" ")
+    sentence_list = ["<START> " + sentence]
+    sentence_bigrams = [b for l in sentence_list for b in zip(l.split(" ")[:-1], l.split(" ")[1:])]
+    # check if first word is a doc opener:
+    try:
+        transition_probability = 0
+        transition_probability += (1 / 3) * math.exp(unigram_dataset[sentence_unigrams[0]][1])
+        transition_probability += (2 / 3) * math.exp(start_dataset[sentence_bigrams[0]][1])
+        sentence_probability += math.log(transition_probability)
+    except:
+        pass
+    for i in range(len(sentence_unigrams)-1):
+        try:
+            transition_probability += (1/3) * math.exp(unigram_dataset[sentence_unigrams[i]][1])
+            transition_probability += (2/3) * math.exp()
+        except:
+            pass
+        print(sentence_unigrams[i], sentence_bigrams[i])
+    # TODO: exp the probabilities to add them and then re-log!
