@@ -7,7 +7,7 @@ from operator import itemgetter
 
 def import_train_data():
     """
-    # import the training data mentioned in the exercise file
+    Import the training data mentioned in the exercise file.
     :return: a dataset of type "datasets.arrow_dataset.Dataset"
     """
     text_dataset = load_dataset('wikitext', 'wikitext-2-raw-v1', split="train")
@@ -16,7 +16,7 @@ def import_train_data():
 
 def tokenize_dataset(dataset: list[str]) -> list:
     """
-    tokenize every string element in a list using Spacy's nlp
+    Tokenize every string element in a list using Spacy's nlp.
     :param dataset: A list of strings
     :return: A list of documents (each containing tokens)
     """
@@ -29,6 +29,11 @@ def tokenize_dataset(dataset: list[str]) -> list:
 
 
 def filter_punctuation_numbers_add_start(list_of_tokens: list) -> list:
+    """
+    Filter all non-alphabetic characters/words from a set of documents.
+    :param list_of_tokens: original dataset tokenized
+    :return: a list of filtered strings
+    """
     filtered_documents = []
     for doc in list_of_tokens:
         doc_list = [word.lemma_ for word in doc if word.is_alpha]
@@ -36,96 +41,112 @@ def filter_punctuation_numbers_add_start(list_of_tokens: list) -> list:
         if doc_string:
             filtered_documents.append("<START> " + doc_string)
     return filtered_documents
-# TODO: add comments
 
 
 def unigram_probability_dict(dataset: list) -> dict:
+    """
+    Creates a dictionary of words and their probability in the dataset.
+    :param dataset: filtered dataset
+    :return: a dict, key is the word, value is its probability
+    """
     all_words_list = [word for doc in dataset for word in doc.split()]
     word_freq_dict = dict(Counter(all_words_list))  # the new dict
-    del word_freq_dict['<START>']
-    # a variable of all word counts in the text
-    all_count_sum = sum(word_freq_dict.values())
+    del word_freq_dict['<START>']  # ignore start-of-sentence marker
+    all_count_sum = sum(word_freq_dict.values())  # a variable of all word counts in the text
     for word, count in word_freq_dict.items():
-        # calculating the probability
-        probability = count/all_count_sum
+        probability = count/all_count_sum  # calculating the probability
         word_freq_dict[word] = probability
     sorted_unigrams = {k: v for k, v in sorted(word_freq_dict.items(), key=itemgetter(1), reverse=True)}
     return sorted_unigrams
-# TODO: add comments
 
 
 def bigram_probability_dict(dataset: list) -> dict:
+    """
+    Creates a dictionary of bigrams and their probability in the dataset.
+    :param dataset: filtered dataset
+    :return: a dict, key is the bigram as a tuple, value is its probability
+    """
     all_bigrams_list = [b for l in dataset for b in zip(l.split(" ")[:-1], l.split(" ")[1:])]
     bigram_freq_dict = dict(Counter(all_bigrams_list))
-    # start_bigrams = {k: v for k, v in bigram_freq_dict.items() if k[0] == '<START>'}
-    all_count_sum = sum(bigram_freq_dict.values())
+    all_count_sum = sum(bigram_freq_dict.values())  # a variable of all bigram counts in the text
     for pair, count in bigram_freq_dict.items():
-        # calculating the probability
-        probability = count / all_count_sum
+        probability = count / all_count_sum  # calculating the probability
         bigram_freq_dict[pair] = probability
     sorted_bigrams = {k: v for k, v in sorted(bigram_freq_dict.items(), key=itemgetter(1), reverse=True)}
     return sorted_bigrams
-# TODO: add comments
 
 
 def calc_unigram_transition(unigrams_dict: dict, cur_word: str) -> float:
+    """
+    Using the unigram model, calculate the probability of a given current word.
+    :param unigrams_dict: the unigrams probability dictionary
+    :param cur_word: the current word of a given sentence
+    :return: the probability of the given current word
+    """
     try:
         return unigrams_dict[cur_word]
-    except KeyError:
+    except KeyError:  # if word does not appear in the training data
         return 0
-# TODO: add comments
 
 
 def calc_bigram_transition(bigrams_dict: dict, last_word: str):
+    """
+    Using the bigram model, for a given word, predict the next word and its probability.
+    :param bigrams_dict: the bigrams probability dictionary
+    :param last_word: the last word of a given sentence
+    :return: 0 if the word does not appear in the training dataset, tuple of the next word
+    and its probability otherwise
+    """
     potential_bigrams = {k: v for k, v in bigrams_dict.items() if k[0] == last_word}
     if not len(potential_bigrams):
         return 0
     sorted_potential_bigrams = {k: v for k, v in sorted(potential_bigrams.items(), key=itemgetter(1), reverse=True)}
     next_word = list(sorted_potential_bigrams.items())[0]
     return next_word
-# TODO: add comments
 
 
 def complete_sentence(sentence: str, bigrams_dict: dict) -> str:
+    """
+    Using the bigram model, predict the next word for a given sentence.
+    :param sentence: the given sentence
+    :param bigrams_dict: the bigrams probability dictionary
+    :return: the completed sentence with the additional word
+    """
     last_word = sentence.split(" ")[-1]
     next_word_calc = calc_bigram_transition(bigrams_dict, last_word)
-    if not next_word_calc:
+    if not next_word_calc:  # the word does not appear in the training data
         return "Cannot predict the next word :("
     next_word = next_word_calc[0][1]
     return sentence + " " + next_word
-# TODO: add comments
 
 
 def compute_sentence_bigram_probability(sentence: str, bigrams_dataset: dict) -> float:
+    """
+    Compute the probability of a given sentence using the bigram model.
+    :param sentence: the given sentence
+    :param bigrams_dataset: the bigrams probability dictionary
+    :return: the probability of the sentence in log
+    """
     sentence_probability = 0
     sentence_bigrams = [b for b in zip(sentence.split(" ")[:-1], sentence.split(" ")[1:])]
     for bigram in sentence_bigrams:
         last_word = bigram[0]
         bigram_calc = calc_bigram_transition(bigrams_dataset, last_word)
-        if not bigram_calc:
+        if not bigram_calc:  # if on of the bigrams does not appear in the training dataset
             return 0
         bigram_probability = bigram_calc[1]
         sentence_probability += math.log(bigram_probability)
     return sentence_probability
-# TODO: add comments
-
-
-def compute_bigram_perplexity(sentences: list, bigrams_dataset: dict) -> float:
-    overall_sentences_probability = 0
-    bigrams_number = 0
-    for sentence in sentences:
-        sentence_bigrams = len([b for b in zip(sentence.split(" ")[:-1], sentence.split(" ")[1:])])
-        bigrams_number += sentence_bigrams
-        sentence_probability = compute_sentence_bigram_probability(sentence, bigrams_dataset)
-        if sentence_probability:
-            overall_sentences_probability += sentence_probability
-        else:
-            overall_sentences_probability += float('-inf')
-    return math.pow(2, -(overall_sentences_probability/bigrams_number))
-# TODO: add comments
 
 
 def compute_interpolation_probability(sentence: str, unigrams_dataset: dict, bigrams_dataset: dict) -> float:
+    """
+    Using linear interpolation, compute the probability of a given sentence.
+    :param sentence: the given sentence
+    :param unigrams_dataset: the unigrams probability dictionary
+    :param bigrams_dataset: the bigrams probability dictionary
+    :return: the probability of the sentence in log
+    """
     sentence_probability = 0
     sentence_bigrams = [b for b in zip(sentence.split(" ")[:-1], sentence.split(" ")[1:])]
     sentence_unigrams = sentence.split()[1:]
@@ -135,15 +156,22 @@ def compute_interpolation_probability(sentence: str, unigrams_dataset: dict, big
         if type(word_bi_prob) is tuple:  # the bigram returns a tuple if word in dict, 0 otherwise
             word_bi_prob = word_bi_prob[1]
         weighted_prob = (((1/3) * word_uni_prob) + ((2/3) * word_bi_prob))
-        if not weighted_prob:
+        if not weighted_prob:  # if the term is unfamiliar to the unigram and bigram models
             sentence_probability += float('-inf')
         if weighted_prob:
             sentence_probability += math.log(weighted_prob)
     return sentence_probability
-# TODO: add comments
 
 
 def compute_model_perplexity(model: str, sentences: list, unigrams_dataset: dict, bigrams_dataset: dict) -> float:
+    """
+    Compute the perplexity of the bigram or the linear model
+    :param model: model type (Bigram or linear)
+    :param sentences: the sentences test set
+    :param unigrams_dataset: the unigrams probability dictionary
+    :param bigrams_dataset: the bigrams probability dictionary
+    :return: the model's perplexity
+    """
     overall_sentences_probability = 0
     bigrams_number = 0
     for sentence in sentences:
@@ -153,9 +181,8 @@ def compute_model_perplexity(model: str, sentences: list, unigrams_dataset: dict
         if model == "Linear": sentence_probability = compute_interpolation_probability(sentence, unigrams_dataset,
                                                                                        bigrams_dataset)
         if sentence_probability: overall_sentences_probability += sentence_probability
-        else: overall_sentences_probability += float('-inf')
+        else: overall_sentences_probability += float('-inf')  # if sentence probability is 0
     return math.pow(2, -(overall_sentences_probability/bigrams_number))
-# TODO: add comments
 
 
 if __name__ == '__main__':
