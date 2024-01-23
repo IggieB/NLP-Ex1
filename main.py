@@ -103,28 +103,19 @@ def compute_sentence_bigram_probability(sentence: str, bigrams_dataset: dict) ->
 # TODO: add comments
 
 
-def compute_bigram_perplexity(sentences: list, start_dataset: dict, bigrams_dataset: dict) -> float:
-    """
-    this function takes a given test set of 1 or more sentences and uses it to
-    calculate the perplexity of the bigram model
-    :param sentences: a test set including 1 or more sentences
-    :param start_dataset: a dataset of probabilities of word as sentence openers
-    :param bigrams_dataset: a dataset of all bigrams' probabilities based on the
-    training dataset
-    :return: a value of the model's perplexity using the test set
-    """
+def compute_bigram_perplexity(sentences: list, bigrams_dataset: dict) -> float:
     overall_sentences_probability = 0
     bigrams_number = 0
     for sentence in sentences:
-        # calculate all bigrams in the sentences of the test set
-        bigrams_number += len(sentence.split(" ")) - 1
-        # handle cases of probability = 0
-        if compute_sentence_bigram_probability(sentence, start_dataset, bigrams_dataset) == 0:
-            overall_sentences_probability -= float('-inf')
+        sentence_bigrams = len([b for  b in zip(sentence.split(" ")[:-1], sentence.split(" ")[1:])])
+        bigrams_number += sentence_bigrams
+        sentence_probability = compute_sentence_bigram_probability(sentence, bigrams_dataset)
+        if sentence_probability:
+            overall_sentences_probability += sentence_probability
         else:
-            overall_sentences_probability -= compute_sentence_bigram_probability(
-                sentence, start_dataset, bigrams_dataset)
-    return math.pow(2, overall_sentences_probability / bigrams_number)
+            overall_sentences_probability += float('-inf')
+    return math.pow(2, -(overall_sentences_probability/bigrams_number))
+# TODO: add comments
 
 
 def compute_interpolation_transition_probability(sentence: str, unigram_dataset: dict,
@@ -154,7 +145,7 @@ def compute_interpolation_transition_probability(sentence: str, unigram_dataset:
 if __name__ == '__main__':
     # ############ Prep #############
     sentences_dataset = import_train_data()  # data type here is "datasets.arrow_dataset.Dataset"
-    dict_dataset = sentences_dataset[0:20]  # change to dict key is 'text', value is a strings list
+    dict_dataset = sentences_dataset[0:]  # change to dict key is 'text', value is a strings list
     tokens_list = tokenize_dataset(dict_dataset['text'])
     filtered_tokens = filter_punctuation_numbers_add_start(tokens_list)
     # ############ Question 1 #############
@@ -169,14 +160,14 @@ if __name__ == '__main__':
     test_set = ["Brad Pitt was born in Oklahoma", "The actor was born in USA"]
     tokenized_test_set = tokenize_dataset(test_set)
     filtered_test_set = filter_punctuation_numbers_add_start(tokenized_test_set)
-    for sentence in filtered_test_set:
-        print(compute_sentence_bigram_probability(sentence, bigrams_probability_dict))
+    # for sentence in filtered_test_set:
+    #     print(compute_sentence_bigram_probability(sentence, bigrams_probability_dict))
     # ############ Question 3 b #############
-    # bigram_perplexity = compute_bigram_perplexity(lemma_test_set, start_probability_dict, bigrams_probability_dict)
+    # bigram_perplexity = compute_bigram_perplexity(filtered_test_set, bigrams_probability_dict)
     # print(bigram_perplexity)
     # ############ Question 4 #############
     # ############ linear interpolation smoothing probability
-    # test_sentence = ["Valkyria Chronicles III"]
+    test_sentence = ["Valkyria Chronicles III"]
     # test_sentence_lemma = convert_test_set(test_sentence)
     # compute_interpolation_transition_probability(test_sentence_lemma[0], unigrams_dataset,
     #                                              start_probability_dict, bigrams_probability_dict)
