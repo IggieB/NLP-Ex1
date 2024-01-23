@@ -123,3 +123,18 @@ def compute_interpolation_transition_probability(sentence: str, unigram_dataset:
             pass
         print(sentence_unigrams[i], sentence_bigrams[i])
     # TODO: exp the probabilities to add them and then re-log!
+
+
+def compute_bigram_perplexity(sentences: list, bigrams_dataset: dict) -> float:
+    overall_sentences_probability = 0
+    bigrams_number = 0
+    for sentence in sentences:
+        sentence_bigrams = len([b for b in zip(sentence.split(" ")[:-1], sentence.split(" ")[1:])])
+        bigrams_number += sentence_bigrams
+        sentence_probability = compute_sentence_bigram_probability(sentence, bigrams_dataset)
+        if sentence_probability:
+            overall_sentences_probability += sentence_probability
+        else:
+            overall_sentences_probability += float('-inf')
+    return math.pow(2, -(overall_sentences_probability/bigrams_number))
+# TODO: add comments
